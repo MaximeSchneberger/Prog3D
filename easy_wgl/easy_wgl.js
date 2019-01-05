@@ -2083,6 +2083,7 @@ let FBO_ops =
 	bind: function()
 	{
 		gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.id);
+		gl.viewport(0,0,this.w,this.h);
 	}
 	,
 
@@ -2142,13 +2143,14 @@ function FBO(colors_attach, depth_attach)
 		gl.bindRenderbuffer( gl.RENDERBUFFER, null);
 	}
 	gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-	
-	return Object.assign(Object.create(FBO_ops),{id,colors_attach,depthRenderBuffer}); 
+		
+	return Object.assign(Object.create(FBO_ops),{id,colors_attach,depthRenderBuffer,w:colors_attach[0].width,h:colors_attach[0].height}); 
 }
 
 function unbind_fbo()
 {
 	gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
+	gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
 }
 
 
@@ -2595,7 +2597,7 @@ Sphere(n)
 		}
 	}
 
-	const BB = create_BB(Vec3(0),1.0);
+	const BB = create_BB(Vec3(0),2.0);
 	
 	return Object.assign(Object.create(Mesh_ops), {positions:pos, vbo_p:null, 
 			normals: norm, vbo_n:null,
@@ -3712,7 +3714,7 @@ let MouseManipulator2D_ops =
 				{
 					ev.preventDefault();
 					ev.stopImmediatePropagation();
-					ui_width_interf -= ev.movementX;
+					ui_width_interf -= ev.movementX / window.devicePixelRatio;
 					ui_resize();
 				}
 			}
@@ -3969,6 +3971,43 @@ let MouseManipulator3D_ops =
 			}
 			internal_update_wgl_needed = true;
 		},{passive:true});
+
+
+		ui_vsep_elt.addEventListener('mousedown', ev =>
+		{
+			this.console_move = true;
+		});
+		ui_hsep_elt.addEventListener('mousedown', ev =>
+		{
+			this.interf_move = true;
+		});
+
+		window.addEventListener('mouseup', ev =>
+		{
+			this.console_move = false;
+			this.interf_move = false;
+		});
+
+		window.addEventListener('mousemove', ev =>
+		{
+			if (ev.buttons !== 0)
+			{
+				if (this.console_move)
+				{
+					ev.preventDefault();
+					ev.stopImmediatePropagation();
+					ui_height_cons -=  ev.movementY/window.devicePixelRatio;;
+					ui_resize();
+				}
+				if (this.interf_move)
+				{
+					ev.preventDefault();
+					ev.stopImmediatePropagation();
+					ui_width_interf -= ev.movementX/window.devicePixelRatio;;
+					ui_resize();
+				}
+			}
+		});
 	}
 }
 
