@@ -1,5 +1,7 @@
 "use strict"
 
+
+
 var background_vert=`#version 300 es
 uniform mat4 projectionMatrix;
 uniform mat4 viewMatrix;
@@ -216,7 +218,7 @@ uniform mat4 projectionMatrix;
 uniform mat4 viewMatrix;
 in vec3 position_in;
 in vec2 texcoord_in;
-uniform float orbiteOffset;
+uniform vec3 orbiteOffset;
 uniform float randoms;
 
 out vec2 TC;
@@ -226,7 +228,7 @@ out vec2 TC;
 void main()
 {
 	float a = 6.2832*float(randoms);
-	gl_Position = projectionMatrix * viewMatrix * vec4(sin(a)*orbiteOffset,cos(a)*orbiteOffset,0,1) + vec4(texcoord_in.x*0.00005,texcoord_in.y*0.0001,0,0);
+	gl_Position = projectionMatrix * viewMatrix * vec4(sin(a)*orbiteOffset.x,cos(a)*orbiteOffset.x,orbiteOffset.z,1) + vec4(texcoord_in.x*0.00005,texcoord_in.y*0.0001,0,0);
 
 	TC=vec2(texcoord_in+vec2(1.0))/2.0;
 	TC=vec2(TC.x,1.0-TC.y);
@@ -306,6 +308,27 @@ let neptunescale = 24622.0;
 let moonscale = 1737.0;
 let maxScale = jupiterscale;
 let minScale = mercuryscale;
+let minvalueScale = 0.0002;	//valeur minimale que peux prendre une planète à l'affichage
+let maxvalueScale = 0.0005;	//valeur maximale que peux prendre une planète à l'affichage
+let startringcoeff = saturnringstartscale/saturnscale;
+let endringcoeff = saturnringendscale/saturnscale;
+let ustartringcoeff = uranusringstartscale/uranusscale;
+let uendringcoeff = uranusringendscale/uranusscale;
+	
+//tailles à l'affichage
+let mercuryscaleDisp = null;
+let venusscaleDisp = null;
+let earthscaleDisp = null;
+let marsscaleDisp = null;
+let jupiterscaleDisp = null;
+let saturnscaleDisp = null;
+let saturnringstartscaleDisp = null;
+let saturnringendscaleDisp = null;
+let uranusscaleDisp = null;
+let uranusringstartscaleDisp = null;
+let uranusringendscaleDisp = null;
+let neptunescaleDisp = null;
+
 
 //distance entre la planète et le soleil
 let mercurydisttosoleil = 57909227.0;
@@ -320,6 +343,20 @@ let neptunedisttosoleil = 4498396441.0;
 let moondisttoearth = 384400.0;
 let minDist = mercurydisttosoleil;
 let maxDist = neptunedisttosoleil;
+let minvalueDist = 0.003;
+let maxvalueDist = 0.1;
+
+//distances à l'affichage
+let mercurydisttosoleilDisp = null;
+let venusdisttosoleilDisp = null;
+let earthdisttosoleilDisp = null;
+let marsdisttosoleilDisp = null;
+let ceintureasteroidedisttosoleilDisp = null;
+let jupiterdisttosoleilDisp = null;
+let saturndisttosoleilDisp = null;
+let uranusdisttosoleilDisp = null;
+let neptunedisttosoleilDisp = null;
+
 
 //rotation initiale (on les initialisent aléatoirement pour éviter un rendu trop brut)
 let mercuryinitrot = Math.random()*360;
@@ -376,8 +413,18 @@ let vao1 = null;
 let asteroideSize = 2000;
 let asteroideRotArray = new Array(asteroideSize);
 let asteroideDistArray = new Array(asteroideSize);
-let asteroideSpeedArray = new Array(asteroideSize);
+let asteroideStandardSpeedArray = new Array(asteroideSize);
+let asteroideModifiedSpeedArray = new Array(asteroideSize);
 let asteroideTypeArray = new Array(asteroideSize);
+let asteroideActualDispRotArray = new Array(asteroideSize);
+let asteroideRotForce = new Array(asteroideSize);
+
+let timeSpeed = null;
+
+let planetscale = 10.0;
+let planetdist = 10.0;
+
+let a = 0;
 
 function getSizeNorm(minValue,maxValue,intervalMin,intervalMax,input)
 {
@@ -391,9 +438,91 @@ function getSizeNorm(minValue,maxValue,intervalMin,intervalMax,input)
 }
 
 
+//normalise le hasard entre 0 et 1
+function gaussianRand() {
+  	var rand = 0;
+
+  	for (var i = 0; i < 6; i += 1) {
+    	rand += Math.random();
+  	}
+
+  	return rand / 6;
+}
+
+function setPlanetesScale(minvalueScale,maxvalueScale) {
+	mercuryscaleDisp = getSizeNorm(minvalueScale,maxvalueScale,minScale,maxScale,mercuryscale);
+	venusscaleDisp = getSizeNorm(minvalueScale,maxvalueScale,minScale,maxScale,venusscale);
+	earthscaleDisp = getSizeNorm(minvalueScale,maxvalueScale,minScale,maxScale,earthscale);
+	marsscaleDisp = getSizeNorm(minvalueScale,maxvalueScale,minScale,maxScale,marsscale);
+	jupiterscaleDisp = getSizeNorm(minvalueScale,maxvalueScale,minScale,maxScale,jupiterscale);
+	saturnscaleDisp = getSizeNorm(minvalueScale,maxvalueScale,minScale,maxScale,saturnscale);
+	uranusscaleDisp = getSizeNorm(minvalueScale,maxvalueScale,minScale,maxScale,uranusscale);
+	neptunescaleDisp = getSizeNorm(minvalueScale,maxvalueScale,minScale,maxScale,neptunescale);
+	saturnringstartscale = saturnscaleDisp * startringcoeff;
+	saturnringendscale = saturnscaleDisp * endringcoeff;
+	uranusringstartscale = uranusscaleDisp * ustartringcoeff;
+	uranusringendscale = uranusscaleDisp * uendringcoeff;
+	moonscale = minvalueScale/3.0;
+}
+
+function setPlanetesDist(minvalueDist,maxvalueDist) {
+	mercurydisttosoleilDisp = getSizeNorm(minvalueDist,maxvalueDist,minDist,maxDist,mercurydisttosoleil);
+	venusdisttosoleilDisp = getSizeNorm(minvalueDist,maxvalueDist,minDist,maxDist,venusdisttosoleil);
+	earthdisttosoleilDisp = getSizeNorm(minvalueDist,maxvalueDist,minDist,maxDist,earthdisttosoleil);
+	marsdisttosoleilDisp = getSizeNorm(minvalueDist,maxvalueDist,minDist,maxDist,marsdisttosoleil);
+	ceintureasteroidedisttosoleilDisp = getSizeNorm(minvalueDist,maxvalueDist,minDist,maxDist,ceintureasteroidedisttosoleil);
+	jupiterdisttosoleilDisp = getSizeNorm(minvalueDist,maxvalueDist,minDist,maxDist,jupiterdisttosoleil);
+	saturndisttosoleilDisp = getSizeNorm(minvalueDist,maxvalueDist,minDist,maxDist,saturndisttosoleil);
+	uranusdisttosoleilDisp = getSizeNorm(minvalueDist,maxvalueDist,minDist,maxDist,uranusdisttosoleil);
+	neptunedisttosoleilDisp = getSizeNorm(minvalueDist,maxvalueDist,minDist,maxDist,neptunedisttosoleil);
+	moondisttoearth = minvalueDist*((planetdist+5.0)/12.0)/5.0;
+}
+
+function setAsteroides() {
+	for(var i=0;i<asteroideSize;i++)
+	{
+		var rand = Math.random()*360;
+		asteroideRotArray[i]=rand;
+
+		var rand2 = Vec3((ceintureasteroidedisttosoleilDisp-(ceintureasteroidedisttosoleilDisp/4))+gaussianRand()*(ceintureasteroidedisttosoleilDisp/2),0,(((gaussianRand()*2.0)-1.0)*0.001));
+		asteroideDistArray[i]=rand2;
+
+		var rand3 = (Math.random()*5.0+2.0)/2.0;
+		asteroideStandardSpeedArray[i]=rand3;
+		asteroideModifiedSpeedArray[i]=rand3;
+
+		var rand4 = Math.floor((Math.random()*10.0)+1.0);
+		asteroideTypeArray[i]=rand4;
+
+		asteroideActualDispRotArray[i]=0;
+
+		asteroideRotForce[i]=(asteroideRotArray[i]+a*asteroideStandardSpeedArray[i]);
+	}
+}
+
+function setPlanetesRot(a,actualDispRot,rotforce,initrot,rotspeed) {
+	actualDispRot += rotforce;
+	
+	let hypRot = (initrot+a*rotspeed);
+	
+	a = ewgl_current_time;
+
+	hypRot = (initrot+a*rotspeed)-hypRot;
+
+	return hypRot*timeSpeed.value;
+}
 
 function init_wgl()
 {
+	UserInterface.begin(); // name of html id
+	UserInterface.use_field_set('V',"Paramétrabilité");
+		//linear = UserInterface.add_check_box('linear ', false, param_textures);
+		timeSpeed = UserInterface.add_slider('Ecoulement du temps ',0,10,1,update_wgl);
+		//wraping = UserInterface.add_list_input(['clamp_to_edge','repeat','mirrored_repeat'],0, param_textures);
+	UserInterface.end_use();
+	UserInterface.adjust_width();
+
+
 	prg_background = ShaderProgram(background_vert,background_frag,'planet');
 	prg_sun = ShaderProgram(sun_vert,sun_frag,'sun');
 	prg_planet = ShaderProgram(planet_vert,planet_frag,'planet');
@@ -466,43 +595,16 @@ function init_wgl()
 	tex_asteroide10.load("texture/asteroide10.png",gl.RGBA8,gl.RGBA,false).then(update_wgl);
 
 	//normalisation des tailles des planètes
-	let startringcoeff = saturnringstartscale/saturnscale;
-	let endringcoeff = saturnringendscale/saturnscale;
-	let ustartringcoeff = uranusringstartscale/uranusscale;
-	let uendringcoeff = uranusringendscale/uranusscale;
-	let minvalue = 0.0002;
-	let maxvalue = 0.0005;
-	mercuryscale = getSizeNorm(minvalue,maxvalue,minScale,maxScale,mercuryscale);
-	venusscale = getSizeNorm(minvalue,maxvalue,minScale,maxScale,venusscale);
-	earthscale = getSizeNorm(minvalue,maxvalue,minScale,maxScale,earthscale);
-	marsscale = getSizeNorm(minvalue,maxvalue,minScale,maxScale,marsscale);
-	jupiterscale = getSizeNorm(minvalue,maxvalue,minScale,maxScale,jupiterscale);
-	saturnscale = getSizeNorm(minvalue,maxvalue,minScale,maxScale,saturnscale);
-	uranusscale = getSizeNorm(minvalue,maxvalue,minScale,maxScale,uranusscale);
-	neptunescale = getSizeNorm(minvalue,maxvalue,minScale,maxScale,neptunescale);
-	saturnringstartscale = saturnscale * startringcoeff;
-	saturnringendscale = saturnscale * endringcoeff;
-	uranusringstartscale = uranusscale * ustartringcoeff;
-	uranusringendscale = uranusscale * uendringcoeff;
-	moonscale = minvalue/3.0;
+	setPlanetesScale(minvalueScale,maxvalueScale);
+	
 
 	//normalisation des distances des planètes entre le soleil
-	minvalue = 0.003;
-	maxvalue = 0.1;
-	mercurydisttosoleil = getSizeNorm(minvalue,maxvalue,minDist,maxDist,mercurydisttosoleil);
-	venusdisttosoleil = getSizeNorm(minvalue,maxvalue,minDist,maxDist,venusdisttosoleil);
-	earthdisttosoleil = getSizeNorm(minvalue,maxvalue,minDist,maxDist,earthdisttosoleil);
-	marsdisttosoleil = getSizeNorm(minvalue,maxvalue,minDist,maxDist,marsdisttosoleil);
-	ceintureasteroidedisttosoleil = getSizeNorm(minvalue,maxvalue,minDist,maxDist,ceintureasteroidedisttosoleil);
-	jupiterdisttosoleil = getSizeNorm(minvalue,maxvalue,minDist,maxDist,jupiterdisttosoleil);
-	saturndisttosoleil = getSizeNorm(minvalue,maxvalue,minDist,maxDist,saturndisttosoleil);
-	uranusdisttosoleil = getSizeNorm(minvalue,maxvalue,minDist,maxDist,uranusdisttosoleil);
-	neptunedisttosoleil = getSizeNorm(minvalue,maxvalue,minDist,maxDist,neptunedisttosoleil);
-	moondisttoearth = minvalue/5.0;
+	setPlanetesDist(minvalueDist,maxvalueDist);
+	
 
 	//normalisation des vitesse de rotation autour du soleil
-	minvalue = 1.0;
-	maxvalue = 10.0;
+	let minvalue = 1.0;
+	let maxvalue = 10.0;
 	mercuryrotspeed = getSizeNorm(minvalue,maxvalue,minRotSpeed,maxRotSpeed,mercuryrotspeed);
 	venusrotspeed = getSizeNorm(minvalue,maxvalue,minRotSpeed,maxRotSpeed,venusrotspeed);
 	earthrotspeed = getSizeNorm(minvalue,maxvalue,minRotSpeed,maxRotSpeed,earthrotspeed);
@@ -532,24 +634,72 @@ function init_wgl()
 	let vbo_q = VBO([-1,-1, 1,-1, 1,1, -1,1],2);
 	vao1 = VAO([TEXCOORD_ATTRIB,vbo_q,0]);
 
-	for(var i=0;i<asteroideSize;i++)
+	setAsteroides();
+}
+
+
+
+document.addEventListener('keydown', function(event) {
+  	if(event.key == '+' && planetscale < 20)
+  	{
+  		planetscale++;
+  		minvalueScale = 0.00025-planetscale*0.00001;
+  		maxvalueScale = 0.00025+planetscale*0.00003;
+  		setPlanetesScale(minvalueScale,maxvalueScale);
+		
+  	}
+	else if(event.key=='-' && planetscale >= 1)
 	{
-		var rand = Math.random()*360;
-		asteroideRotArray[i]=rand;
-
-		var rand2 = (ceintureasteroidedisttosoleil-(ceintureasteroidedisttosoleil/8))+Math.random()*(ceintureasteroidedisttosoleil/4);
-		asteroideDistArray[i]=rand2;
-
-		var rand3 = (Math.random()*5.0+2.0)/2.0;
-		asteroideSpeedArray[i]=rand3;
-
-		var rand4 = Math.floor((Math.random()*10.0)+1.0);
-		asteroideTypeArray[i]=rand4;
+		planetscale--;
+		minvalueScale = 0.00025-planetscale*0.00001;
+  		maxvalueScale = 0.00025+planetscale*0.00003;
+		setPlanetesScale(minvalueScale,maxvalueScale);
 	}
 
+	if(event.key == 'z' && planetdist < 20)
+  	{
+  		planetdist++;
+  		minvalueDist = 0.004-planetdist*0.0001;
+  		maxvalueDist = 0.05+planetdist*0.005;
+  		setPlanetesDist(minvalueDist,maxvalueDist);
+  		setAsteroides();
+		
+  	}
+	else if(event.key=='a' && planetdist >= 1)
+	{
+		planetdist--;
+		minvalueDist = 0.004-planetdist*0.0001;
+  		maxvalueDist = 0.05+planetdist*0.005;
+		setPlanetesDist(minvalueDist,maxvalueDist);
+		setAsteroides();
+	}
+});
 
-	
-}
+
+let mercuryActualDispRot = 0;
+let venusActualDispRot = 0;
+let earthActualDispRot = 0;
+let moonActualDispRot = 0;
+let marsActualDispRot = 0;
+let asteroidesActualDispRot = 0;
+let jupiterActualDispRot = 0;
+let saturnActualDispRot = 0;
+let uranusActualDispRot = 0;
+let neptuneActualDispRot = 0;
+
+
+
+let mercuryRotForce = (mercuryinitrot+a*mercuryrotspeed);
+let venusRotForce = (venusinitrot+a*venusrotspeed);
+let earthRotForce = (earthinitrot+a*earthrotspeed);
+let moonRotForce = (mooninitrot+a*moonrotspeed);
+let marsRotForce = (marsinitrot+a*marsrotspeed);
+let jupiterRotForce = (jupiterinitrot+a*jupiterrotspeed);
+let saturnRotForce = (saturninitrot+a*saturnrotspeed);
+let uranusRotForce = (uranusinitrot+a*uranusrotspeed);
+let neptuneRotForce = (neptuneinitrot+a*neptunerotspeed);
+
+let speed = null;
 
 function draw_wgl()
 {
@@ -565,14 +715,46 @@ function draw_wgl()
 	const projection_matrix = scene_camera.get_projection_matrix();
 	const view_matrix = scene_camera.get_view_matrix();
 
-	let a= ewgl_current_time;
-	//let pl = Vec3(10*Math.cos(a),10*Math.sin(a),1.0);
+
+	mercuryActualDispRot = mercuryActualDispRot+mercuryRotForce;
+	venusActualDispRot = venusActualDispRot+venusRotForce;
+	earthActualDispRot = earthActualDispRot+earthRotForce;
+	moonActualDispRot = moonActualDispRot+moonRotForce;
+	marsActualDispRot = marsActualDispRot+marsRotForce;
+	jupiterActualDispRot = jupiterActualDispRot+jupiterRotForce;
+	saturnActualDispRot = saturnActualDispRot+saturnRotForce;
+	uranusActualDispRot = uranusActualDispRot+uranusRotForce;
+	neptuneActualDispRot = neptuneActualDispRot+neptuneRotForce;
+
+	mercuryRotForce = setPlanetesRot(a,mercuryActualDispRot,mercuryRotForce,mercuryinitrot,mercuryrotspeed);
+	venusRotForce = setPlanetesRot(a,venusActualDispRot,venusRotForce,venusinitrot,venusrotspeed);
+	earthRotForce = setPlanetesRot(a,earthActualDispRot,earthRotForce,earthinitrot,earthrotspeed);
+	moonRotForce = setPlanetesRot(a,moonActualDispRot,moonRotForce,mooninitrot,moonrotspeed);
+	marsRotForce = setPlanetesRot(a,marsActualDispRot,marsRotForce,marsinitrot,marsrotspeed);
+	jupiterRotForce = setPlanetesRot(a,jupiterActualDispRot,jupiterRotForce,jupiterinitrot,jupiterrotspeed);
+	saturnRotForce = setPlanetesRot(a,saturnActualDispRot,saturnRotForce,saturninitrot,saturnrotspeed);
+	uranusRotForce = setPlanetesRot(a,uranusActualDispRot,uranusRotForce,uranusinitrot,uranusrotspeed);
+	neptuneRotForce = setPlanetesRot(a,neptuneActualDispRot,neptuneRotForce,neptuneinitrot,neptunerotspeed);
+	
+
+	if(speed!=timeSpeed.value)
+	{
+		for(var i=0;i<asteroideSize;i++)
+		{
+			asteroideModifiedSpeedArray[i]=asteroideStandardSpeedArray[i]*timeSpeed.value;
+		}
+	}
+
+	speed = timeSpeed.value;
+
+	a = ewgl_current_time;
 	let pl = Vec3(0,0,0);
 	let pos_lum=view_matrix.mult(Vec4(pl,1)).xyz;
 
 
 
 	gl.disable(gl.DEPTH_TEST);
+
 
 	//Sphere englobante
 	prg_background.bind();
@@ -584,6 +766,7 @@ function draw_wgl()
 	unbind_texture2d();
 
 	gl.enable(gl.DEPTH_TEST);
+	
 
 	//Soleil
 	prg_sun.bind();
@@ -596,9 +779,9 @@ function draw_wgl()
 
 	//Mercure
 	prg_planet.bind();
-	update_uniform('viewMatrix', mmult(view_matrix,rotateY(mercuryinitrot+a*mercuryrotspeed),translate(0,0,mercurydisttosoleil),rotateX(90+mercuryinclinaison),rotateZ(mercuryselfrotspeed*a),scale(mercuryscale)));
+	update_uniform('viewMatrix', mmult(view_matrix,rotateY(mercuryActualDispRot),translate(0,0,mercurydisttosoleilDisp),rotateX(90+mercuryinclinaison),rotateZ(mercuryselfrotspeed*a),scale(mercuryscaleDisp)));
 	update_uniform('projectionMatrix', projection_matrix);
-	update_uniform('normalMatrix',  mmult(view_matrix,rotateY(mercuryinitrot+a*mercuryrotspeed),translate(0,0,mercurydisttosoleil),rotateX(90+mercuryinclinaison),rotateZ(mercuryselfrotspeed*a),scale(mercuryscale)).inverse3transpose());
+	update_uniform('normalMatrix',  mmult(view_matrix,rotateY(mercuryActualDispRot),translate(0,0,mercurydisttosoleilDisp),rotateX(90+mercuryinclinaison),rotateZ(mercuryselfrotspeed*a),scale(mercuryscaleDisp)).inverse3transpose());
 	update_uniform('light_pos', pos_lum);
 	update_uniform('specness', 2+Math.pow(2.0,1+50/10));
 	update_uniform('shininess', 1/100);
@@ -609,9 +792,9 @@ function draw_wgl()
 
 	//Vénus
 	prg_planet.bind();
-	update_uniform('viewMatrix', mmult(view_matrix,rotateY(venusinitrot+a*venusrotspeed),translate(0,0,venusdisttosoleil),rotateX(90+venusinclinaison),rotateZ(-1*(venusselfrotspeed*a)),scale(venusscale)));
+	update_uniform('viewMatrix', mmult(view_matrix,rotateY(venusActualDispRot),translate(0,0,venusdisttosoleilDisp),rotateX(90+venusinclinaison),rotateZ(-1*(venusselfrotspeed*a)),scale(venusscaleDisp)));
 	update_uniform('projectionMatrix', projection_matrix);
-	update_uniform('normalMatrix',  mmult(view_matrix,rotateY(venusinitrot+a*venusrotspeed),translate(0,0,venusdisttosoleil),rotateX(90+venusinclinaison),rotateZ(-1*(venusselfrotspeed*a)),scale(venusscale)).inverse3transpose());
+	update_uniform('normalMatrix',  mmult(view_matrix,rotateY(venusActualDispRot),translate(0,0,venusdisttosoleilDisp),rotateX(90+venusinclinaison),rotateZ(-1*(venusselfrotspeed*a)),scale(venusscaleDisp)).inverse3transpose());
 	update_uniform('light_pos', pos_lum);
 	update_uniform('specness', 2+Math.pow(2.0,1+50/10));
 	update_uniform('shininess', 50/100);
@@ -622,9 +805,9 @@ function draw_wgl()
 
 	//Terre
 	prg_planet.bind();
-	update_uniform('viewMatrix', mmult(view_matrix,rotateY(earthinitrot+a*earthrotspeed),translate(0,0,earthdisttosoleil),rotateX(90+earthinclinaison),rotateZ(earthselfrotspeed*a),scale(earthscale)));
+	update_uniform('viewMatrix', mmult(view_matrix,rotateY(earthActualDispRot),translate(0,0,earthdisttosoleilDisp),rotateX(90+earthinclinaison),rotateZ(earthselfrotspeed*a),scale(earthscaleDisp)));
 	update_uniform('projectionMatrix', projection_matrix);
-	update_uniform('normalMatrix',  mmult(view_matrix,rotateY(earthinitrot+a*earthrotspeed),translate(0,0,earthdisttosoleil),rotateX(90+earthinclinaison),rotateZ(earthselfrotspeed*a),scale(earthscale)).inverse3transpose());
+	update_uniform('normalMatrix',  mmult(view_matrix,rotateY(earthActualDispRot),translate(0,0,earthdisttosoleilDisp),rotateX(90+earthinclinaison),rotateZ(earthselfrotspeed*a),scale(earthscaleDisp)).inverse3transpose());
 	update_uniform('light_pos', pos_lum);
 	update_uniform('specness', 2+Math.pow(2.0,1+50/10));
 	update_uniform('shininess', 50/100);
@@ -635,9 +818,9 @@ function draw_wgl()
 
 	//Lune
 	prg_planet.bind();
-	update_uniform('viewMatrix', mmult(view_matrix,rotateY(earthinitrot+a*earthrotspeed),translate(0,0,earthdisttosoleil),rotateY(mooninitrot+a*moonrotspeed),translate(0,0,moondisttoearth),rotateY(-90),rotateX(90+mooninclinaison),scale(moonscale)));
+	update_uniform('viewMatrix', mmult(view_matrix,rotateY(earthActualDispRot),translate(0,0,earthdisttosoleilDisp),rotateY(moonActualDispRot),translate(0,0,moondisttoearth),rotateY(-90),rotateX(90+mooninclinaison),scale(moonscale)));
 	update_uniform('projectionMatrix', projection_matrix);
-	update_uniform('normalMatrix', mmult(view_matrix,rotateY(earthinitrot+a*earthrotspeed),translate(0,0,earthdisttosoleil),rotateY(mooninitrot+a*moonrotspeed),translate(0,0,moondisttoearth),rotateY(-90),rotateX(90+mooninclinaison),scale(moonscale)).inverse3transpose());
+	update_uniform('normalMatrix', mmult(view_matrix,rotateY(earthActualDispRot),translate(0,0,earthdisttosoleilDisp),rotateY(moonActualDispRot),translate(0,0,moondisttoearth),rotateY(-90),rotateX(90+mooninclinaison),scale(moonscale)).inverse3transpose());
 	update_uniform('light_pos', pos_lum);
 	update_uniform('specness', 2+Math.pow(2.0,1+50/10));
 	update_uniform('shininess', 50/100);
@@ -648,9 +831,9 @@ function draw_wgl()
 
 	//Mars
 	prg_planet.bind();
-	update_uniform('viewMatrix', mmult(view_matrix,rotateY(marsinitrot+a*marsrotspeed),translate(0,0,marsdisttosoleil),rotateX(90+marsinclinaison),rotateZ(marsselfrotspeed*a),scale(marsscale)));
+	update_uniform('viewMatrix', mmult(view_matrix,rotateY(marsActualDispRot),translate(0,0,marsdisttosoleilDisp),rotateX(90+marsinclinaison),rotateZ(marsselfrotspeed*a),scale(marsscaleDisp)));
 	update_uniform('projectionMatrix', projection_matrix);
-	update_uniform('normalMatrix', mmult(view_matrix,rotateY(marsinitrot+a*marsrotspeed),translate(0,0,marsdisttosoleil),rotateX(90+marsinclinaison),rotateZ(marsselfrotspeed*a),scale(marsscale)).inverse3transpose());
+	update_uniform('normalMatrix', mmult(view_matrix,rotateY(marsActualDispRot),translate(0,0,marsdisttosoleilDisp),rotateX(90+marsinclinaison),rotateZ(marsselfrotspeed*a),scale(marsscaleDisp)).inverse3transpose());
 	update_uniform('light_pos', pos_lum);
 	update_uniform('specness', 2+Math.pow(2.0,1+50/10));
 	update_uniform('shininess', 50/100);
@@ -661,9 +844,9 @@ function draw_wgl()
 
 	//Jupiter
 	prg_planet.bind();
-	update_uniform('viewMatrix', mmult(view_matrix,rotateY(jupiterinitrot+a*jupiterrotspeed),translate(0,0,jupiterdisttosoleil),rotateX(90+jupiterinclinaison),rotateZ(jupiterselfrotspeed*a),scale(jupiterscale)));
+	update_uniform('viewMatrix', mmult(view_matrix,rotateY(jupiterActualDispRot),translate(0,0,jupiterdisttosoleilDisp),rotateX(90+jupiterinclinaison),rotateZ(jupiterselfrotspeed*a),scale(jupiterscaleDisp)));
 	update_uniform('projectionMatrix', projection_matrix);
-	update_uniform('normalMatrix', mmult(view_matrix,rotateY(jupiterinitrot+a*jupiterrotspeed),translate(0,0,jupiterdisttosoleil),rotateX(90+jupiterinclinaison),rotateZ(jupiterselfrotspeed*a),scale(jupiterscale)).inverse3transpose());
+	update_uniform('normalMatrix', mmult(view_matrix,rotateY(jupiterActualDispRot),translate(0,0,jupiterdisttosoleilDisp),rotateX(90+jupiterinclinaison),rotateZ(jupiterselfrotspeed*a),scale(jupiterscaleDisp)).inverse3transpose());
 	update_uniform('light_pos', pos_lum);
 	update_uniform('specness', 2+Math.pow(2.0,1+50/10));
 	update_uniform('shininess', 50/100);
@@ -674,9 +857,9 @@ function draw_wgl()
 
 	//Saturne
 	prg_planet.bind();
-	update_uniform('viewMatrix', mmult(view_matrix,rotateY(saturninitrot+a*saturnrotspeed),translate(0,0,saturndisttosoleil),rotateX(90-saturninclinaison),rotateZ(saturnselfrotspeed*a),scale(saturnscale)));
+	update_uniform('viewMatrix', mmult(view_matrix,rotateY(saturnActualDispRot),translate(0,0,saturndisttosoleilDisp),rotateX(90-saturninclinaison),rotateZ(saturnselfrotspeed*a),scale(saturnscaleDisp)));
 	update_uniform('projectionMatrix', projection_matrix);
-	update_uniform('normalMatrix', mmult(view_matrix,rotateY(saturninitrot+a*saturnrotspeed),translate(0,0,saturndisttosoleil),rotateX(90-saturninclinaison),rotateZ(saturnselfrotspeed*a),scale(saturnscale)).inverse3transpose());
+	update_uniform('normalMatrix', mmult(view_matrix,rotateY(saturnActualDispRot),translate(0,0,saturndisttosoleilDisp),rotateX(90-saturninclinaison),rotateZ(saturnselfrotspeed*a),scale(saturnscaleDisp)).inverse3transpose());
 	update_uniform('light_pos', pos_lum);
 	update_uniform('specness', 2+Math.pow(2.0,1+50/10));
 	update_uniform('shininess', 50/100);
@@ -687,9 +870,9 @@ function draw_wgl()
 
 	//Uranus
 	prg_planet.bind();
-	update_uniform('viewMatrix', mmult(view_matrix,rotateY(uranusinitrot+a*uranusrotspeed),translate(0,0,uranusdisttosoleil),rotateX(90+uranusinclinaison),rotateZ(-1*(uranusselfrotspeed*a)),scale(uranusscale)));
+	update_uniform('viewMatrix', mmult(view_matrix,rotateY(uranusActualDispRot),translate(0,0,uranusdisttosoleilDisp),rotateX(90+uranusinclinaison),rotateZ(-1*(uranusselfrotspeed*a)),scale(uranusscaleDisp)));
 	update_uniform('projectionMatrix', projection_matrix);
-	update_uniform('normalMatrix', mmult(view_matrix,rotateY(uranusinitrot+a*uranusrotspeed),translate(0,0,uranusdisttosoleil),rotateX(90+uranusinclinaison),rotateZ(-1*(uranusselfrotspeed*a)),scale(uranusscale)).inverse3transpose());
+	update_uniform('normalMatrix', mmult(view_matrix,rotateY(uranusActualDispRot),translate(0,0,uranusdisttosoleilDisp),rotateX(90+uranusinclinaison),rotateZ(-1*(uranusselfrotspeed*a)),scale(uranusscaleDisp)).inverse3transpose());
 	update_uniform('light_pos', pos_lum);
 	update_uniform('specness', 2+Math.pow(2.0,1+50/10));
 	update_uniform('shininess', 50/100);
@@ -700,9 +883,9 @@ function draw_wgl()
 
 	//Neptune
 	prg_planet.bind();
-	update_uniform('viewMatrix', mmult(view_matrix,rotateY(neptuneinitrot+a*neptunerotspeed),translate(0,0,neptunedisttosoleil),rotateX(90+neptuneinclinaison),rotateZ(neptuneselfrotspeed*a),scale(neptunescale)));
+	update_uniform('viewMatrix', mmult(view_matrix,rotateY(neptuneActualDispRot),translate(0,0,neptunedisttosoleilDisp),rotateX(90+neptuneinclinaison),rotateZ(neptuneselfrotspeed*a),scale(neptunescaleDisp)));
 	update_uniform('projectionMatrix', projection_matrix);
-	update_uniform('normalMatrix', mmult(view_matrix,rotateY(neptuneinitrot+a*neptunerotspeed),translate(0,0,neptunedisttosoleil),rotateX(90+neptuneinclinaison),rotateZ(neptuneselfrotspeed*a),scale(neptunescale)).inverse3transpose());
+	update_uniform('normalMatrix', mmult(view_matrix,rotateY(neptuneActualDispRot),translate(0,0,neptunedisttosoleilDisp),rotateX(90+neptuneinclinaison),rotateZ(neptuneselfrotspeed*a),scale(neptunescaleDisp)).inverse3transpose());
 	update_uniform('light_pos', pos_lum);
 	update_uniform('specness', 2+Math.pow(2.0,1+50/10));
 	update_uniform('shininess', 50/100);
@@ -717,8 +900,8 @@ function draw_wgl()
 	update_uniform('orbitePrecision',1024);
 	update_uniform('projectionMatrix', projection_matrix);
 	update_uniform('viewMatrix',mmult(view_matrix,rotateX(90)));
-	update_uniform('orbiteWidth',mercuryscale/10);
-	update_uniform('orbiteOffset',mercurydisttosoleil);
+	update_uniform('orbiteWidth',mercuryscaleDisp/10);
+	update_uniform('orbiteOffset',mercurydisttosoleilDisp);
 	update_uniform('side',0);
 	gl.drawArrays(gl.TRIANGLE_STRIP, 0, 1026);
 	update_uniform('side',1);
@@ -730,8 +913,8 @@ function draw_wgl()
 	update_uniform('orbitePrecision',1024);
 	update_uniform('projectionMatrix', projection_matrix);
 	update_uniform('viewMatrix',mmult(view_matrix,rotateX(90)));
-	update_uniform('orbiteWidth',venusscale/10);
-	update_uniform('orbiteOffset',venusdisttosoleil);
+	update_uniform('orbiteWidth',venusscaleDisp/10);
+	update_uniform('orbiteOffset',venusdisttosoleilDisp);
 	update_uniform('side',0);
 	gl.drawArrays(gl.TRIANGLE_STRIP, 0, 1026);
 	update_uniform('side',1);
@@ -743,8 +926,8 @@ function draw_wgl()
 	update_uniform('orbitePrecision',1024);
 	update_uniform('projectionMatrix', projection_matrix);
 	update_uniform('viewMatrix',mmult(view_matrix,rotateX(90)));
-	update_uniform('orbiteWidth',earthscale/10);
-	update_uniform('orbiteOffset',earthdisttosoleil);
+	update_uniform('orbiteWidth',earthscaleDisp/10);
+	update_uniform('orbiteOffset',earthdisttosoleilDisp);
 	update_uniform('side',0);
 	gl.drawArrays(gl.TRIANGLE_STRIP, 0, 1026);
 	update_uniform('side',1);
@@ -755,7 +938,7 @@ function draw_wgl()
 	prg_orbite.bind();
 	update_uniform('orbitePrecision',1024);
 	update_uniform('projectionMatrix', projection_matrix);
-	update_uniform('viewMatrix', mmult(view_matrix,rotateY(earthinitrot+a*earthrotspeed),translate(0,0,earthdisttosoleil),rotateX(90)));
+	update_uniform('viewMatrix', mmult(view_matrix,rotateY(earthActualDispRot),translate(0,0,earthdisttosoleilDisp),rotateX(90)));
 	update_uniform('orbiteWidth',moonscale/10);
 	update_uniform('orbiteOffset',moondisttoearth);
 	update_uniform('side',0);
@@ -769,8 +952,8 @@ function draw_wgl()
 	update_uniform('orbitePrecision',1024);
 	update_uniform('projectionMatrix', projection_matrix);
 	update_uniform('viewMatrix',mmult(view_matrix,rotateX(90)));
-	update_uniform('orbiteWidth',marsscale/10);
-	update_uniform('orbiteOffset',marsdisttosoleil);
+	update_uniform('orbiteWidth',marsscaleDisp/10);
+	update_uniform('orbiteOffset',marsdisttosoleilDisp);
 	update_uniform('side',0);
 	gl.drawArrays(gl.TRIANGLE_STRIP, 0, 1026);
 	update_uniform('side',1);
@@ -782,8 +965,8 @@ function draw_wgl()
 	update_uniform('orbitePrecision',1024);
 	update_uniform('projectionMatrix', projection_matrix);
 	update_uniform('viewMatrix',mmult(view_matrix,rotateX(90)));
-	update_uniform('orbiteWidth',jupiterscale/10);
-	update_uniform('orbiteOffset',jupiterdisttosoleil);
+	update_uniform('orbiteWidth',jupiterscaleDisp/10);
+	update_uniform('orbiteOffset',jupiterdisttosoleilDisp);
 	update_uniform('side',0);
 	gl.drawArrays(gl.TRIANGLE_STRIP, 0, 1026);
 	update_uniform('side',1);
@@ -795,8 +978,8 @@ function draw_wgl()
 	update_uniform('orbitePrecision',1024);
 	update_uniform('projectionMatrix', projection_matrix);
 	update_uniform('viewMatrix',mmult(view_matrix,rotateX(90)));
-	update_uniform('orbiteWidth',saturnscale/10);
-	update_uniform('orbiteOffset',saturndisttosoleil);
+	update_uniform('orbiteWidth',saturnscaleDisp/10);
+	update_uniform('orbiteOffset',saturndisttosoleilDisp);
 	update_uniform('side',0);
 	gl.drawArrays(gl.TRIANGLE_STRIP, 0, 1026);
 	update_uniform('side',1);
@@ -808,8 +991,8 @@ function draw_wgl()
 	update_uniform('orbitePrecision',1024);
 	update_uniform('projectionMatrix', projection_matrix);
 	update_uniform('viewMatrix',mmult(view_matrix,rotateX(90)));
-	update_uniform('orbiteWidth',uranusscale/10);
-	update_uniform('orbiteOffset',uranusdisttosoleil);
+	update_uniform('orbiteWidth',uranusscaleDisp/10);
+	update_uniform('orbiteOffset',uranusdisttosoleilDisp);
 	update_uniform('side',0);
 	gl.drawArrays(gl.TRIANGLE_STRIP, 0, 1026);
 	update_uniform('side',1);
@@ -821,8 +1004,8 @@ function draw_wgl()
 	update_uniform('orbitePrecision',1024);
 	update_uniform('projectionMatrix', projection_matrix);
 	update_uniform('viewMatrix',mmult(view_matrix,rotateX(90)));
-	update_uniform('orbiteWidth',neptunescale/10);
-	update_uniform('orbiteOffset',neptunedisttosoleil);
+	update_uniform('orbiteWidth',neptunescaleDisp/10);
+	update_uniform('orbiteOffset',neptunedisttosoleilDisp);
 	update_uniform('side',0);
 	gl.drawArrays(gl.TRIANGLE_STRIP, 0, 1026);
 	update_uniform('side',1);
@@ -834,7 +1017,7 @@ function draw_wgl()
 	prg_saturn_ring.bind();
 	update_uniform('orbitePrecision',1024);
 	update_uniform('projectionMatrix', projection_matrix);
-	update_uniform('viewMatrix',mmult(view_matrix,rotateY(saturninitrot+a*saturnrotspeed),translate(0,0,saturndisttosoleil),rotateX(90-saturninclinaison)));
+	update_uniform('viewMatrix',mmult(view_matrix,rotateY(saturnActualDispRot),translate(0,0,saturndisttosoleilDisp),rotateX(90-saturninclinaison)));
 	update_uniform('orbiteWidth',saturnringendscale - saturnringstartscale);
 	update_uniform('orbiteOffset',saturnringstartscale);
 	tex_saturn_ring.bind(0);
@@ -847,7 +1030,7 @@ function draw_wgl()
 	prg_saturn_ring.bind();
 	update_uniform('orbitePrecision',1024);
 	update_uniform('projectionMatrix', projection_matrix);
-	update_uniform('viewMatrix',mmult(view_matrix,rotateY(uranusinitrot+a*uranusrotspeed),translate(0,0,uranusdisttosoleil),rotateX(90+uranusinclinaison)));
+	update_uniform('viewMatrix',mmult(view_matrix,rotateY(uranusActualDispRot),translate(0,0,uranusdisttosoleilDisp),rotateX(90+uranusinclinaison)));
 	update_uniform('orbiteWidth',uranusringendscale - uranusringstartscale);
 	update_uniform('orbiteOffset',uranusringstartscale);
 	tex_uranus_ring.bind(0);
@@ -859,10 +1042,15 @@ function draw_wgl()
 	//ceinture d'astéroïdes
 	for(var i=0;i<asteroideSize;i++)
 	{
+		//asteroideActualDispRotArray[i] = asteroideActualDispRotArray[i]+asteroideRotForce[i];
+
+		//asteroideRotForce[i] = setPlanetesRot(a,asteroideActualDispRotArray[i],asteroideRotForce[i],asteroideRotArray[i],asteroideStandardSpeedArray[i]);
+
+
 		vao1.bind();
 		prg_ceinture_asteroide.bind();
 		update_uniform('projectionMatrix', projection_matrix);
-		update_uniform('viewMatrix',mmult(view_matrix,rotateY(a*asteroideSpeedArray[i]),rotateX(90)));
+		update_uniform('viewMatrix',mmult(view_matrix,rotateY(a*asteroideModifiedSpeedArray[i]),rotateX(90)));
 		update_uniform('orbiteOffset',asteroideDistArray[i]);
 		update_uniform('randoms',asteroideRotArray[i]);
 		switch(asteroideTypeArray[i])
